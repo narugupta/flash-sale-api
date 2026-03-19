@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+.env/
+.env
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Database
+*.sqlite3
+
+# Docker
+*.tar
+*.pid
+
+# Redis dump
+dump.rdb
+
+# Test / coverage
+.coverage
+htmlcov/
+
+# Node (if frontend later)
+node_modules/
+.next/
+dist/
+
+# Secrets
+.env.*
