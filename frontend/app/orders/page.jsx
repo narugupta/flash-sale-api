@@ -21,7 +21,8 @@ export default function Orders() {
 
   const fetchOrders = async () => {
     try {
-      const res = await axios.get("http://localhost:8000/orders");
+      // const res = await axios.get("http://localhost:8000/orders");
+      const res = await axios.get((process.env.NEXT_PUBLIC_API || "http://localhost:8000") + "/orders");
       setOrders(res.data);
     } catch (e) {
       console.error("Failed to fetch orders", e);
