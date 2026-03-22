@@ -2,8 +2,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Navbar from "../../components/Navbar";
 
-const PROMETHEUS = "http://localhost:9090";
-const GRAFANA = "http://localhost:3000";
+// const PROMETHEUS = "http://localhost:9090";
+// const GRAFANA = "http://localhost:3000";
+
+const PROMETHEUS = "http://18.191.34.49:9090";
+const GRAFANA = "http://18.191.34.49:3001";
 
 async function promQuery(query) {
   try {
