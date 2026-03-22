@@ -174,7 +174,7 @@ function LoadTestPanel({ onSimulate }) {
         const userId = Math.floor(Math.random() * 10000) + 1;
         const productId = Math.floor(Math.random() * 8) + 1;
         try {
-          const res = await fetch("http://localhost:8000/purchase", {
+          const res = await fetch((process.env.NEXT_PUBLIC_API || "http://localhost:8000") + "/purchase", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
