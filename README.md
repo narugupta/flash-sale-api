@@ -314,4 +314,4 @@ flash-sale-api/
 **Narendra Kumar Gupta**
 
 - GitHub: [narugupta](https://github.com/narugupta)
-- LinkedIn: [linkedin.com/in/your-profile](https://www.linkedin.com)
+- LinkedIn: [linkedin.com/in/narugupta](https://www.linkedin.com/in/narugupta)
