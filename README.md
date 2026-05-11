@@ -1,133 +1,129 @@
 # FlashScale — High-Concurrency Flash Sale System
 
-FlashScale is a distributed high-concurrency flash-sale platform designed to simulate real-world e-commerce traffic spikes and inventory contention scenarios. The system ensures strong consistency under heavy load using PostgreSQL row-level locking, Redis distributed locks, asynchronous order processing with RabbitMQ, and Saga-inspired transaction handling.
+FlashScale is a distributed high-concurrency platform designed to simulate real-world e-commerce traffic spikes and inventory contention. The system maintains strong consistency under sustained load using PostgreSQL row-level locking, Redis distributed locks, asynchronous order processing via RabbitMQ, and a Saga-inspired transaction workflow.
 
-The project was stress-tested with up to **1000 concurrent users**, sustaining approximately **130 RPS** while preventing inventory overselling.
-
----
-
-# Features
-
-* High-concurrency flash-sale architecture
-* PostgreSQL row-level locking (`SELECT ... FOR UPDATE`)
-* Redis distributed locking
-* RabbitMQ asynchronous order processing
-* Saga-inspired transaction workflow
-* Idempotent checkout handling
-* Prometheus metrics collection
-* Grafana monitoring dashboards
-* Locust load testing
-* Fully Dockerized microservice-style setup
-* Next.js frontend dashboard
+Tested across multiple load profiles up to 1000 concurrent users, peaking at 136 RPS, with zero inventory overselling. Deployed and verified on AWS EC2.
 
 ---
 
-# System Architecture
+## Why This Problem Is Interesting
 
-```text
-                        +----------------+
-                        |    Frontend    |
-                        |    Next.js     |
-                        +--------+-------+
-                                 |
-                                 v
-                        +----------------+
-                        |   FastAPI API  |
-                        +--------+-------+
-                                 |
-                +----------------+----------------+
-                |                                 |
-                v                                 v
-       +----------------+               +----------------+
-       | PostgreSQL DB  |               |     Redis      |
-       | Inventory Data |               | Distributed    |
-       | Row Locking    |               | Locks          |
-       +----------------+               +----------------+
-                                 |
-                                 v
-                        +----------------+
-                        |   RabbitMQ     |
-                        | Async Queue    |
-                        +--------+-------+
-                                 |
-                                 v
-                        +----------------+
-                        | Payment Worker |
-                        | Order Handling |
-                        +----------------+
-                                 |
-                                 v
-                        +----------------+
-                        | Prometheus     |
-                        | Metrics        |
-                        +--------+-------+
-                                 |
-                                 v
-                        +----------------+
-                        | Grafana        |
-                        | Dashboards     |
-                        +----------------+
+High-concurrency reservation and checkout systems share a common set of hard problems: simultaneous competing requests from multiple channels, inventory races, async fulfilment pipelines, and the need for real-time operational visibility.
+
+Flash sale systems and multi-channel booking platforms face structurally identical engineering challenges. The mapping is direct:
+
+| FlashScale Component | Booking Platform Equivalent |
+|---|---|
+| Redis distributed locks | Preventing double-bookings across concurrent OTA channels |
+| RabbitMQ async queue | Unified inbox buffering from multiple inbound sources |
+| PostgreSQL row-level locking | Atomic availability updates under concurrent writes |
+| Saga-inspired transactions | Multi-step booking → payment → confirmation workflows |
+| Idempotent order handling | Duplicate webhook deduplication from external platforms |
+| Prometheus + Grafana | Operational dashboards and revenue analytics pipelines |
+
+This project explores one of the core infrastructure challenges in that space — maintaining consistency under concurrent multi-channel activity — and implements a layered architectural response to it.
+
+---
+
+## System Architecture
+
+```
+                   +----------------+
+                   |    Frontend    |
+                   |    Next.js     |
+                   +-------+--------+
+                           |
+                           v
+                   +----------------+
+                   |   FastAPI API  |
+                   +-------+--------+
+                           |
+          +----------------+----------------+
+          |                                 |
+          v                                 v
+ +----------------+               +----------------+
+ | PostgreSQL DB  |               |     Redis      |
+ | Inventory Data |               | Distributed    |
+ | Row Locking    |               | Locks          |
+ +----------------+               +----------------+
+          |
+          v
+ +----------------+
+ |   RabbitMQ     |
+ | Async Queue    |
+ +-------+--------+
+         |
+         v
+ +----------------+
+ | Payment Worker |
+ | Order Handling |
+ +-------+--------+
+         |
+         v
+ +----------------+
+ | Prometheus +   |
+ | Grafana        |
+ +----------------+
 ```
 
 ---
 
-# Tech Stack
+## Tech Stack
 
-## Backend
-
-* Python
-* FastAPI
-* SQLAlchemy
-
-## Database
-
-* PostgreSQL
-
-## Distributed Systems
-
-* Redis
-* RabbitMQ
-
-## Frontend
-
-* Next.js
-* Axios
-
-## Observability
-
-* Prometheus
-* Grafana
-
-## Load Testing
-
-* Locust
-
-## DevOps
-
-* Docker
-* Docker Compose
+| Layer | Technology |
+|---|---|
+| Backend | Python, FastAPI, SQLAlchemy |
+| Database | PostgreSQL |
+| Distributed Systems | Redis, RabbitMQ 3.13.7 |
+| Frontend | Next.js, Axios |
+| Observability | Prometheus, Grafana |
+| Load Testing | Locust |
+| DevOps | Docker, Docker Compose |
+| Cloud | AWS EC2 |
 
 ---
 
-# Load Testing Results
+## Load Testing Results
 
-The system was stress-tested using Locust with concurrent traffic spikes.
+Load tests were run in two configurations. Local tests used Docker Compose on a single host — FastAPI on port 8000, a single RabbitMQ broker node, single payment worker on port 8001, and default PostgreSQL configuration, with Locust on the same machine. The full stack was also deployed to AWS EC2 and verified under load.
 
-| Metric             | Result                       |
-| ------------------ | ---------------------------- |
-| Concurrent Users   | 1000+                        |
-| Peak Throughput    | ~130 RPS                     |
-| Median Latency     | ~120–300 ms                  |
-| Architecture       | Queue-Based Async Processing |
-| Inventory Oversell | Prevented                    |
+### Test Run 1 — 500 Users / 50 spawn rate
+
+| Metric | Result |
+|---|---|
+| Concurrent Users | 500 |
+| Spawn Rate | 50 users/sec |
+| Peak RPS (Grafana) | ~115 |
+| Sustained RPS | ~100–115 |
+| Median Latency (Locust) | 50 ms |
+| p95 Latency (Locust) | 140 ms |
+| p99 Latency (Locust) | 2,200 ms |
+| API Latency Steady State (Grafana) | ~300–350 ms |
+| Total Requests | 6,591 |
+| Application-Level Rejections | 5,356 (81%) |
+| Successful Orders Processed | ~800 |
+| Inventory Oversell | Zero |
+
+### Test Run 2 — 1000 Users / 100 spawn rate
+
+| Metric | Result |
+|---|---|
+| Concurrent Users | 1000 |
+| Spawn Rate | 100 users/sec |
+| Peak RPS (Grafana) | ~136 |
+| Sustained RPS | ~80–135 (variable — see Engineering Notes) |
+| API Latency Steady State (Grafana) | ~790–870 ms |
+| Total Requests | ~27,000 |
+| Successful Orders Processed | ~660 |
+| Inventory Oversell | Zero |
+
+**On the application-level rejection rate:** the majority of Locust "failures" are HTTP 409/400 responses — correct sold-out rejections, not crashes. Under a flash sale model, most concurrent purchase attempts are expected to fail once inventory is exhausted. The system rejected them cleanly and consistently.
 
 ---
 
-# Concurrency Control Strategy
+## Concurrency Control Strategy
 
-FlashScale prevents overselling using a layered concurrency strategy:
-
-## 1. PostgreSQL Row-Level Locking
+### 1. PostgreSQL Row-Level Locking
 
 ```sql
 SELECT * FROM inventory
@@ -135,103 +131,137 @@ WHERE product_id = :id
 FOR UPDATE;
 ```
 
-Ensures only one transaction modifies inventory at a time.
+Ensures only one transaction modifies a given inventory row at a time, preventing silent race conditions at the database level.
+
+### 2. Redis Distributed Locks
+
+Coordinates competing checkout attempts across distributed workers before they reach the database — an outer gate before the inner lock.
+
+### 3. RabbitMQ Queue Buffering
+
+Traffic spikes are buffered asynchronously to reduce request loss and stabilize processing during bursts. In practice across all test runs, queue depth stayed near zero — brief spikes to 1, clearing immediately. The actual bottleneck was at the PostgreSQL lock layer, not the queue.
+
+### 4. Saga-Inspired Transaction Workflow
+
+Multi-step flows — reserve inventory, initiate payment, confirm order, rollback on failure — are handled with explicit compensating transactions. No silent partial commits.
+
+### 5. Idempotent Order Handling
+
+Duplicate events, retried webhooks, and replayed messages are safely deduplicated. The system reaches the same correct state regardless of how many times a given event arrives.
 
 ---
 
-## 2. Redis Distributed Locks
+## Observability
 
-Prevents concurrent checkout races across distributed workers.
+Real-time Prometheus metrics surfaced through Grafana dashboards:
 
----
+- Requests per second
+- API latency distribution
+- Queue depth and backpressure
+- Orders processed
+- Payment success and failure rates
+- Throughput under sustained load
 
-## 3. RabbitMQ Queue Buffering
-
-Incoming requests are buffered asynchronously during traffic spikes.
-
----
-
-## 4. Idempotent Order Handling
-
-Duplicate payment/order processing is safely ignored.
+Observability was designed in from the start, not added after the fact. It is the only reliable way to know whether a concurrent system is actually behaving correctly under load.
 
 ---
 
-# Monitoring & Observability
+## Engineering Notes
 
-The platform includes real-time monitoring dashboards using Prometheus and Grafana.
+A few things became clear only during actual load testing — not during design:
 
-## Tracked Metrics
+- **Latency climbed steeply on ramp-up and stayed elevated.** In the 500-user test, API latency settled around 300–350 ms. In the 1000-user test it climbed to ~800 ms and stayed there with considerable variance. The ramp itself was the most expensive moment — concurrent DB lock acquisition spiked latency before the system found a steady state.
 
-* Requests per second (RPS)
-* API latency
-* Queue depth
-* Orders processed
-* Payment success/failure
-* Throughput under load
+- **RPS dropped mid-test at 1000 users, then partially recovered.** After peaking at ~136 RPS, throughput fell to ~75 RPS before recovering to ~95 RPS. As inventory depleted, the request mix shifted. Rejection responses are fast. Buy responses held locks. The ratio changing mid-test created a visible throughput dip in the Grafana data.
+
+- **Queue depth was never the bottleneck.** Across all test runs, RabbitMQ queue depth stayed near zero — brief spikes to 1. The pressure was entirely at the PostgreSQL row-lock layer. This was only visible once Grafana was running during the test.
+
+- **p99 tail latency was significantly worse than p95.** In the 500-user test, p95 was 140 ms and p99 jumped to 2,200 ms. Under high lock contention, a small fraction of requests waited substantially longer — something the median alone would never surface.
+
+- **The 81% failure rate looked alarming until it wasn't.** Initial Locust output was a moment of concern before realising all failures were correct sold-out responses, not crashes. Application-level rejection and system failure look identical in raw Locust stats without inspecting the error codes.
 
 ---
 
-# Load Testing
+## Limitations & Future Work
 
-Run Locust:
+This system prioritises consistency and correctness over maximum throughput. Several areas would require deeper hardening before production use:
+
+- Worker autoscaling under variable load
+- Distributed tracing across services
+- Failure recovery orchestration
+- Multi-region consistency
+- Event replay and dead-letter handling
+- Chaos testing
+- Rate limiting and abuse protection
+- Separating the load generator from the system under test
+
+The project was designed primarily as an exploration of concurrency control, queue-driven architectures, and operational reliability under load — not as a claim to have solved distributed systems at large.
+
+---
+
+## Applicability
+
+These architectural patterns are directly applicable to any platform handling concurrent reservation or fulfilment workflows across multiple external channels. The core problems — consistency under concurrent writes, async message processing, idempotent event handling, and real-time operational visibility — are domain-independent. Booking systems, ticketing platforms, inventory management, and hospitality infrastructure all share the same underlying contention challenges this project addresses.
+
+---
+
+## AWS EC2 Deployment
+
+The full stack is deployed on AWS EC2. To replicate:
+
+**1. Launch an EC2 instance**
+
+Recommended: `t3.medium` or above, Ubuntu 22.04 LTS, ports 22, 80, 3000, 8000, 8089, 9090, 3001, 15672 open in Security Group.
+
+**2. SSH into the instance and install dependencies**
 
 ```bash
-locust -f locustfile.py
+ssh -i your-key.pem ubuntu@your-ec2-public-ip
+
+sudo apt update && sudo apt install -y docker.io docker-compose-plugin git
+sudo usermod -aG docker ubuntu
+newgrp docker
 ```
 
-Open:
+**3. Clone and start**
 
-```text
-http://localhost:8089
+```bash
+git clone https://github.com/narugupta/flash-sale-api.git
+cd flash-sale-api
+docker compose up --build -d
+docker exec -it flashsale_backend python -m app.database.seed
 ```
 
-Example stress test:
+**4. Access services via your EC2 public IP**
 
-```text
-Users: 1000
-Spawn Rate: 100/sec
-```
+| Service | URL |
+|---|---|
+| Frontend | http://\<ec2-ip\>:3000 |
+| Backend API | http://\<ec2-ip\>:8000 |
+| Swagger Docs | http://\<ec2-ip\>:8000/docs |
+| Prometheus | http://\<ec2-ip\>:9090 |
+| Grafana | http://\<ec2-ip\>:3001 |
+| RabbitMQ Dashboard | http://\<ec2-ip\>:15672 |
+| Locust | http://\<ec2-ip\>:8089 |
 
 ---
 
-# Dockerized Deployment
+## Local Quick Start
 
-The entire stack is containerized using Docker Compose.
-
-## Services
-
-* FastAPI Backend
-* RabbitMQ Worker
-* PostgreSQL
-* Redis
-* RabbitMQ
-* Prometheus
-* Grafana
-* Next.js Frontend
-
----
-
-# Quick Start
-
-## 1. Clone Repository
+**1. Clone the repository**
 
 ```bash
 git clone https://github.com/narugupta/flash-sale-api.git
 cd flash-sale-api
 ```
 
----
-
-## 2. Start Containers
+**2. Start all containers**
 
 ```bash
 docker compose up --build
 ```
 
----
-
-## 3. Seed Database
+**3. Seed the database**
 
 ```bash
 docker exec -it flashsale_backend python -m app.database.seed
@@ -239,25 +269,23 @@ docker exec -it flashsale_backend python -m app.database.seed
 
 ---
 
-# Service URLs
+## Load Testing
 
-| Service            | URL                                                      |
-| ------------------ | -------------------------------------------------------- |
-| Frontend           | [http://localhost:3000](http://localhost:3000)           |
-| Backend API        | [http://localhost:8000](http://localhost:8000)           |
-| Swagger Docs       | [http://localhost:8000/docs](http://localhost:8000/docs) |
-| Prometheus         | [http://localhost:9090](http://localhost:9090)           |
-| Grafana            | [http://localhost:3001](http://localhost:3001)           |
-| RabbitMQ Dashboard | [http://localhost:15672](http://localhost:15672)         |
-| Locust             | [http://localhost:8089](http://localhost:8089)           |
+```bash
+locust -f locustfile.py
+```
+
+Open `http://localhost:8089` (or your EC2 IP) and configure:
+
+- **Users:** 500 or 1000
+- **Spawn rate:** 50 or 100/sec
 
 ---
 
-# Project Structure
+## Project Structure
 
-```text
+```
 flash-sale-api/
-│
 ├── backend/
 │   ├── app/
 │   │   ├── api/
@@ -269,13 +297,11 @@ flash-sale-api/
 │   │   └── main.py
 │   ├── requirements.txt
 │   └── Dockerfile
-│
 ├── frontend/
 │   ├── app/
 │   ├── components/
 │   ├── package.json
 │   └── Dockerfile
-│
 ├── docker-compose.yml
 ├── prometheus.yml
 └── README.md
@@ -283,52 +309,9 @@ flash-sale-api/
 
 ---
 
-# Engineering Challenges Solved
+## Author
 
-## High Inventory Contention
+**Narendra Kumar Gupta**
 
-Handled concurrent purchase attempts using database row locking and distributed locking.
-
-## Queue Backpressure
-
-Buffered bursts of traffic using RabbitMQ asynchronous queues.
-
-## Consistency vs Latency Tradeoff
-
-Prioritized strong consistency under extreme concurrency to avoid inventory overselling.
-
-## Observability
-
-Implemented real-time monitoring to analyze throughput, latency, and queue behavior.
-
----
-
-# Future Improvements
-
-* Kubernetes deployment
-* CI/CD pipeline
-* Auto-scaling workers
-* WebSocket-based real-time updates
-* Rate limiting
-* Distributed tracing
-* NGINX reverse proxy
-
----
-
-# Author
-
-Narendra Kumar Gupta
-
-* GitHub: [https://github.com/narugupta](https://github.com/narugupta)
-* LinkedIn: [https://www.linkedin.com](https://www.linkedin.com)
-
----
-
-# Highlights
-
-* Distributed systems architecture
-* High-concurrency engineering
-* Queue-based asynchronous processing
-* Production-style observability
-* Dockerized deployment
-* Real-world load testing
+- GitHub: [narugupta](https://github.com/narugupta)
+- LinkedIn: [linkedin.com/in/your-profile](https://www.linkedin.com)
